@@ -402,16 +402,34 @@ int aliceVision_main(int argc, char **argv)
     }
   }
 
-  // apply user scale
-  S *= userScale;
-  t *= userScale;
-
-  if (!applyScale)
-      S = 1;
-  if (!applyRotation)
+  if(!applyRotation)
+  {
+      // remove rotation from translation
+      t = R.transpose() * t;
+      // remove rotation
       R = Mat3::Identity();
+  }
+  if(applyScale)
+  {
+      // apply user scale
+      S *= userScale;
+      t *= userScale;
+  }
+  else
+  {
+      // remove scale from translation
+      if(std::abs(S) > 0.00001)
+      {
+          t /= S;
+      }
+      // reset scale to 1
+      S = 1.0;
+  }
   if (!applyTranslation)
+  {
+      // remove translation
       t = Vec3::Zero();
+  }
 
   {
       ALICEVISION_LOG_INFO("Transformation:" << std::endl
