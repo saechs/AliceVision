@@ -134,6 +134,7 @@ int aliceVision_main(int argc, char **argv)
   // command-line parameters
   std::string verboseLevel = system::EVerboseLevel_enumToString(system::Logger::getDefaultVerboseLevel());
   std::string knownPosesFilePath;
+  std::string mayaFilePath;
   std::string sfmDataFilePath;
   std::string outputFilename;
 
@@ -145,6 +146,7 @@ int aliceVision_main(int argc, char **argv)
   po::options_description requiredParams("Required parameters");
   requiredParams.add_options()
       ("knownPosesData", po::value<std::string>(&knownPosesFilePath)->required(), "Input path to a json file or a folder containing an XMP file per image.")
+      ("mayaData", po::value<std::string>(&mayaFilePath)->required(), "Input path to the associated maya ascii .ma file.")
       ("sfmData", po::value<std::string>(&sfmDataFilePath)->required(), "SfmData filepath.")
       ("output,o", po::value<std::string>(&outputFilename)->required(), "Output sfmData filepath.");
 
@@ -266,7 +268,8 @@ int aliceVision_main(int argc, char **argv)
 
               
               intrinsic->setScale(focalLengthPix, focalLengthPix);
-              intrinsic->setOffset(offsetX, offsetY)
+              intrinsic->setOffset(offsetX, offsetY);
+
 
               if(xmp.distortionModel == "brown3t2")
               {
@@ -428,107 +431,111 @@ int aliceVision_main(int argc, char **argv)
         }
   }
 
-  std::ifstream file("/home/servantf/data/sfm/chr_army01_cesar_soldier1/ma/chr_army01_cesar_soldier1.ma");
-
-  std::string line;
-  std::string name = "";
-  bool hasName = false;
-  bool hasPosition = false;
-  bool hasRotation = false;
-  double pos[3];
-  double rot[3];
-
-  while (std::getline(file, line))
+  if (is_regular_file(fs::path(mayaFilePath)))
   {
-    std::regex regex("[^\\s\\t;]+");
-    std::vector<std::string> words;
-    
-    for (auto it = std::sregex_iterator(line.begin(), line.end(), regex); it != std::sregex_iterator(); it++)
-    {
-        std::string tok = it->str();
-        tok.erase(std::remove(tok.begin(), tok.end(), '\"'), tok.end());
-        words.push_back(tok);
-    }
+    ALICEVISION_LOG_INFO("Parsing maya file");
+    std::ifstream file(mayaFilePath);
 
-    if (words.size() == 0) continue;
+    std::string line;
+    std::string name = "";
+    bool hasName = false;
+    bool hasPosition = false;
+    bool hasRotation = false;
+    double pos[3];
+    double rot[3];
 
-    if (words[0] == "createNode")
+    while (std::getline(file, line))
     {
-        if (words.size() == 4)
+        std::regex regex("[^\\s\\t;]+");
+        std::vector<std::string> words;
+        
+        for (auto it = std::sregex_iterator(line.begin(), line.end(), regex); it != std::sregex_iterator(); it++)
         {
-            name = words[3];
-            hasName = true;
-            hasPosition = false;
+            std::string tok = it->str();
+            tok.erase(std::remove(tok.begin(), tok.end(), '\"'), tok.end());
+            words.push_back(tok);
+        }
+
+        if (words.size() == 0) continue;
+
+        if (words[0] == "createNode")
+        {
+            if (words.size() == 4)
+            {
+                name = words[3];
+                hasName = true;
+                hasPosition = false;
+                hasRotation = false;
+            }
+        }
+
+        if (words[0] == "setAttr")
+        {
+            if (words[1] == ".translate")
+            {
+                if (hasName && (!hasPosition))
+                {
+                    hasPosition = true;
+                    pos[0] = std::stod(words[4]);
+                    pos[1] = std::stod(words[5]);
+                    pos[2] = std::stod(words[6]);
+                }
+            }
+
+            if (words[1] == ".rotate")
+            {
+                if (hasName && (!hasRotation))
+                {
+                    hasRotation = true;
+                    rot[0] = std::stod(words[4]);
+                    rot[1] = std::stod(words[5]);
+                    rot[2] = std::stod(words[6]);
+                }
+            }
+        }
+
+        if (hasName && hasRotation && hasPosition)
+        {
+            if (viewIdPerStem.count(name) == 0) 
+            {
+                continue;
+            }
+
+            const IndexT viewId = viewIdPerStem[name];
+            aliceVision::sfmData::View& view = sfmData.getView(viewId);
+            aliceVision::sfmData::CameraPose& pose = sfmData.getPoses()[view.getPoseId()];
+
+            Eigen::Matrix3d R = Eigen::Matrix3d::Identity();
+            const Eigen::AngleAxis<double> MX(degreeToRadian(rot[0]), Eigen::Vector3d::UnitX());
+            const Eigen::AngleAxis<double> MY(degreeToRadian(rot[1]), Eigen::Vector3d::UnitY());
+            const Eigen::AngleAxis<double> MZ(degreeToRadian(rot[2]), Eigen::Vector3d::UnitZ());
+            R = MZ * MY * MX;
+            
+            Eigen::Vector3d position;
+            position(0) = pos[0];
+            position(1) = pos[1];
+            position(2) = pos[2];
+
+            Vec3 translation = - R * position;
+
+            Eigen::Matrix3d alice_R_maya = Eigen::Matrix3d::Identity();
+
+            alice_R_maya(0, 0) = 1.0;
+            alice_R_maya(1, 1) = -1.0;
+            alice_R_maya(2, 2) = -1.0;
+            position = position;
+
+            R =  R * alice_R_maya; 
+
+
+            aliceVision::geometry::Pose3 pose3(R.transpose(), position);
+            pose.setTransform(pose3);
+            
+            hasName = false;
             hasRotation = false;
-        }
+            hasPosition = false;
+        }    
     }
-
-    if (words[0] == "setAttr")
-    {
-        if (words[1] == ".translate")
-        {
-            if (hasName && (!hasPosition))
-            {
-                hasPosition = true;
-                pos[0] = std::stod(words[4]);
-                pos[1] = std::stod(words[5]);
-                pos[2] = std::stod(words[6]);
-            }
-        }
-
-        if (words[1] == ".rotate")
-        {
-            if (hasName && (!hasRotation))
-            {
-                hasRotation = true;
-                rot[0] = std::stod(words[4]);
-                rot[1] = std::stod(words[5]);
-                rot[2] = std::stod(words[6]);
-            }
-        }
-    }
-
-    if (hasName && hasRotation && hasPosition)
-    {
-        if (viewIdPerStem.count(name) == 0) 
-        {
-            continue;
-        }
-
-        const IndexT viewId = viewIdPerStem[name];
-        aliceVision::sfmData::View& view = sfmData.getView(viewId);
-        aliceVision::sfmData::CameraPose& pose = sfmData.getPoses()[view.getPoseId()];
-
-        Eigen::Matrix3d R = Eigen::Matrix3d::Identity();
-        const Eigen::AngleAxis<double> MX(degreeToRadian(rot[0]), Eigen::Vector3d::UnitX());
-        const Eigen::AngleAxis<double> MY(degreeToRadian(rot[1]), Eigen::Vector3d::UnitY());
-        const Eigen::AngleAxis<double> MZ(degreeToRadian(rot[2]), Eigen::Vector3d::UnitZ());
-        R = MZ * MY * MX;
-        
-        Eigen::Vector3d position;
-        position(0) = pos[0];
-        position(1) = pos[1];
-        position(2) = pos[2];
-
-        Vec3 translation = - R * position;
-
-        Eigen::Matrix3d alice_R_maya = Eigen::Matrix3d::Identity();
-
-        alice_R_maya(0, 0) = 1.0;
-        alice_R_maya(1, 1) = -1.0;
-        alice_R_maya(2, 2) = -1.0;
-        position = position;
-
-        R =  R * alice_R_maya; 
-
-
-        aliceVision::geometry::Pose3 pose3(R.transpose(), position);
-        pose.setTransform(pose3);
-        
-        hasName = false;
-        hasRotation = false;
-        hasPosition = false;
-    }    
   }
 
   // export the SfMData scene in the expected format
@@ -537,5 +544,6 @@ int aliceVision_main(int argc, char **argv)
       ALICEVISION_LOG_ERROR("An error occured while trying to save '" << outputFilename << "'");
       return EXIT_FAILURE;
   }
+  
   return EXIT_SUCCESS;
 }
