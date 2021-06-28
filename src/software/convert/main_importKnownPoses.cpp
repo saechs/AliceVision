@@ -266,9 +266,7 @@ int aliceVision_main(int argc, char **argv)
 
               
               intrinsic->setScale(focalLengthPix, focalLengthPix);
-              intrinsic->setOffset(offsetX, offsetY);
-
-              std::cout << focalLengthPix << std::endl;
+              intrinsic->setOffset(offsetX, offsetY)
 
               if(xmp.distortionModel == "brown3t2")
               {
@@ -290,7 +288,7 @@ int aliceVision_main(int argc, char **argv)
                     distortionCoefficients.push_back(xmp.distortionCoefficients[2]);
                     distortionCoefficients.push_back(xmp.distortionCoefficients[5]);
                     distortionCoefficients.push_back(xmp.distortionCoefficients[4]);
-                    //camera->setDistortionParams(distortionCoefficients); // vector of 5 elements (r1, r2, r3, t1, t2)
+                    camera->setDistortionParams(distortionCoefficients); // vector of 5 elements (r1, r2, r3, t1, t2)
                 }
                 else
                 {
@@ -526,7 +524,6 @@ int aliceVision_main(int argc, char **argv)
 
         aliceVision::geometry::Pose3 pose3(R.transpose(), position);
         pose.setTransform(pose3);
-        std::cout << "ok" << std::endl;
         
         hasName = false;
         hasRotation = false;
