@@ -264,7 +264,7 @@ public:
     * @return false if no boundaries.
     */
     bool getSurfaceBoundaries(StaticVectorBool& out_trisToConsider, bool invert = false) const;
-
+    
 
 };
 
