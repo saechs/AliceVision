@@ -2154,6 +2154,7 @@ Pixel Mesh::getTriOtherPtsIds(int triId, int _ptId) const
 
     if(nothers != 2)
     {
+        std::cout << tris[triId].v[0] << " " << tris[triId].v[1] << " " << tris[triId].v[2] << std::endl;
         throw std::runtime_error("Mesh::getTriOtherPtsIds: pt X neighbouring tringle without pt X");
     }
 
@@ -2280,7 +2281,7 @@ bool Mesh::loadFromObjAscii(const std::string& objAsciiFileName)
         return false;
     }
 
-    const aiScene * scene = importer.ReadFile(objAsciiFileName, aiProcessPreset_TargetRealtime_Fast);
+    const aiScene * scene = importer.ReadFile(objAsciiFileName, aiProcessPreset_TargetRealtime_MaxQuality);
     if (!scene)
     {
         ALICEVISION_LOG_INFO("Failed loading mesh from file : " << objAsciiFileName);
@@ -2364,18 +2365,18 @@ bool Mesh::loadFromObjAscii(const std::string& objAsciiFileName)
                 for (int idVertex = 0; idVertex < face.mNumIndices; idVertex++)
                 {
                     unsigned int index = face.mIndices[idVertex];
-                    unsigned int global_index = map_indices[index - 1];
+                    unsigned int global_index = map_indices[index];
                     
-                    triangle.v[idVertex] = map_indices[global_index];
+                    triangle.v[idVertex] = global_index;
 
                     if (mesh->HasTextureCoords(0))
                     {
-                        uvids[idVertex] = map_indices[global_index];
+                        uvids[idVertex] = global_index;
                     }
                     
                     if (mesh->HasNormals())
                     {
-                        nid[idVertex] = map_indices[global_index];
+                        nid[idVertex] = global_index;
                     }
                 }
 
