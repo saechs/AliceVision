@@ -2270,6 +2270,10 @@ bool Mesh::loadFromObjAscii(const std::string& objAsciiFileName)
     trisUvIds.clear();
     _trisMtlIds.clear();
     _colors.clear();
+    nmtls = 0;
+    uvCoords.clear();
+    normals.clear();
+    pointsVisibilities.clear();
 
     std::ifstream in(objAsciiFileName.c_str());
     if (!in.fail())
@@ -2357,6 +2361,8 @@ bool Mesh::loadFromObjAscii(const std::string& objAsciiFileName)
                 Voxel nid;
                 Voxel uvids;
 
+                triangle.alive = true;
+
                 if (face.mNumIndices != 3)
                 {
                     continue;
@@ -2382,11 +2388,8 @@ bool Mesh::loadFromObjAscii(const std::string& objAsciiFileName)
 
                 tris.push_back(triangle);
                 _trisMtlIds.push_back(mesh->mMaterialIndex);
-
-                if (mesh->HasTextureCoords(0))
-                {
-                    trisUvIds.push_back(uvids);
-                }
+                trisUvIds.push_back(uvids);
+                
                 
                 if (mesh->HasNormals())
                 {
@@ -2402,9 +2405,6 @@ bool Mesh::loadFromObjAscii(const std::string& objAsciiFileName)
 
         if (node == nullptr) continue;
     }
-
-    std::cout << tris.size() << std::endl;
-    std::cout << pts.size() << std::endl;
 
     return true;
 }
